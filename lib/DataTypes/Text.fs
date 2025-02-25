@@ -104,6 +104,13 @@ module Text =
     | Concat (x, y) -> isMultiLine x || isMultiLine y
     | Empty | Str _ -> false
 
+  let rec prependNewline prefix = function
+    | Empty -> Empty
+    | Newline -> Newline + prefix
+    | Str s -> Str s
+    | Concat (x, y) -> prependNewline prefix x + prependNewline prefix y
+    | Indent x -> Indent (prependNewline prefix x)
+
   /// Get the length of a text. Indents are ignored.
   let rec length = function
     | Empty -> 0

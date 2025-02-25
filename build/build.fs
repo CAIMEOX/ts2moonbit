@@ -7,6 +7,7 @@ open Fake.IO
 open Fake.IO.Globbing.Operators
 open Fake.IO.FileSystemOperators
 open Fake.JavaScript
+
 let rootDir = Path.getFullName "."
 let srcDir = "./src"
 let outputDir = "./output"
@@ -23,79 +24,80 @@ let run cmd dir args =
     CreateProcess.fromRawCommandLine cmd args
     |> CreateProcess.withWorkingDirectory dir
     |> Proc.run
+
   if result.ExitCode <> 0 then
     failwithf "Error while running '%s' with args: %s " cmd args
 
 let platformTool tool =
   lazy
     ProcessUtils.tryFindFileOnPath tool
-    |> function Some t -> t | _ -> failwithf "%s not found" tool
+    |> function
+      | Some t -> t
+      | _ -> failwithf "%s not found" tool
 
 let dotnetExec cmd args =
   let result = DotNet.exec id cmd args
+
   if not result.OK then
     failwithf "Error while running 'dotnet %s %s'" cmd args
 
 let opamTool = platformTool "opam"
+let moonTool = platformTool "moon"
 let opam args = run opamTool.Value "./" args
-let dune args = run opamTool.Value "./" (sprintf "exec -- dune %s" args)
+
+let dune args =
+  run opamTool.Value "./" (sprintf "exec -- dune %s" args)
+
+let moon args = run moonTool.Value "./" args
 
 // Build targets
 
 let setup () =
-  Target.create "Clean" <| fun _ ->
+  Target.create "Clean"
+  <| fun _ ->
     !! "src/bin"
     ++ "src/obj"
     ++ (distDir </> "js") // clean ts2ocaml.js
     ++ "src/.fable"
     |> Seq.iter Shell.cleanDir
 
-    !! "src/**/*fs.js"
-    ++ "src/**/*fs.js.map"
-    |> Seq.iter Shell.rm
+    !! "src/**/*fs.js" ++ "src/**/*fs.js.map" |> Seq.iter Shell.rm
 
-  Target.create "Restore" <| fun _ ->
-    DotNet.restore
-      id
-      "ts2ocaml.sln"
+  Target.create "Restore" <| fun _ -> DotNet.restore id "ts2ocaml.sln"
 
-  Target.create "YarnInstall" <| fun _ ->
-    Yarn.installFrozenLockFile id
+  Target.create "YarnInstall" <| fun _ -> Yarn.installFrozenLockFile id
 
   Target.create "Prepare" ignore
 
-  Target.create "BuildForPublish" <| fun _ ->
-    dotnetExec "fable" $"{srcDir} --sourceMaps --run webpack --mode=production"
+  Target.create "BuildForPublish"
+  <| fun _ -> dotnetExec "fable" $"{srcDir} --sourceMaps --run webpack --mode=production"
 
-  Target.create "BuildForTest" <| fun _ ->
-    dotnetExec "fable" $"{srcDir} --sourceMaps --define DEBUG --run webpack --mode=development"
+  Target.create "BuildForTest"
+  <| fun _ -> dotnetExec "fable" $"{srcDir} --sourceMaps --define DEBUG --run webpack --mode=development"
 
   Target.create "Build" ignore
 
-  Target.create "Watch" <| fun _ ->
-    dotnetExec "fable" $"watch {srcDir} --sourceMaps --define DEBUG --run webpack -w --mode=development"
+  Target.create "Watch"
+  <| fun _ -> dotnetExec "fable" $"watch {srcDir} --sourceMaps --define DEBUG --run webpack -w --mode=development"
 
   Target.create "Test" ignore
 
   Target.create "Publish" ignore
 
-  "YarnInstall"
-    ==> "Restore"
-    ==> "Prepare"
+  "YarnInstall" ==> "Restore" ==> "Prepare"
 
-  "Prepare"
-    ==> "BuildForTest"
-    ==> "Build"
+  "Prepare" ==> "BuildForTest" ==> "Build"
 
-  "Prepare"
-    ==> "BuildForPublish"
+  "Prepare" ==> "BuildForPublish"
 
-  "Prepare"
-    ==> "Watch"
+  "Prepare" ==> "Watch"
 
   "Clean"
-    ?=> "BuildForTest" ?=> "Build" ?=> "Test"
-    ?=> "BuildForPublish" ?=> "Publish"
+  ?=> "BuildForTest"
+  ?=> "Build"
+  ?=> "Test"
+  ?=> "BuildForPublish"
+  ?=> "Publish"
 
 // Test targets
 
@@ -106,9 +108,7 @@ module Test =
     let srcDir = testDir </> "src"
 
     let clean () =
-      !! $"{outputDir}/*"
-      ++ $"{srcDir}/*.mli"
-      ++ $"{srcDir}/stub.js"
+      !! $"{outputDir}/*" ++ $"{srcDir}/*.mli" ++ $"{srcDir}/stub.js"
       |> Seq.iter Shell.rm
 
     let generateBindings () =
@@ -117,36 +117,48 @@ module Test =
       let ts2ocaml args files =
         Yarn.exec (sprintf "ts2ocaml %s" (String.concat " " (Seq.append args files))) id
 
-      ts2ocaml ["jsoo"; "--verbose"; "--nowarn"; "--stdlib"; $"-o {outputDir}"] <|
-        !! "node_modules/typescript/lib/lib.*.d.ts"
+      ts2ocaml [ "jsoo" ; "--verbose" ; "--nowarn" ; "--stdlib" ; $"-o {outputDir}" ]
+      <| !! "node_modules/typescript/lib/lib.*.d.ts"
 
-      let packages = [
-         // "full" package involving a lot of inheritance
-         "full", !! "node_modules/typescript/lib/typescript.d.ts", [];
+      let packages =
+        [
+          // "full" package involving a lot of inheritance
+          "full", !! "node_modules/typescript/lib/typescript.d.ts", []
 
-         // "full" packages involving a lot of dependencies (which includes some "safe" packages)
-         "safe", !! "node_modules/@types/scheduler/tracing.d.ts", [];
-         "full", !! "node_modules/csstype/index.d.ts", [];
-         "safe", !! "node_modules/@types/prop-types/index.d.ts", ["--rec-module=off"];
-         "full", !! "node_modules/@types/react/index.d.ts" ++ "node_modules/@types/react/global.d.ts", ["--readable-names"];
-         "full", !! "node_modules/@types/react-modal/index.d.ts", ["--readable-names"];
+          // "full" packages involving a lot of dependencies (which includes some "safe" packages)
+          "safe", !! "node_modules/@types/scheduler/tracing.d.ts", []
+          "full", !! "node_modules/csstype/index.d.ts", []
+          "safe", !! "node_modules/@types/prop-types/index.d.ts", [ "--rec-module=off" ]
+          "full",
+          !! "node_modules/@types/react/index.d.ts"
+          ++ "node_modules/@types/react/global.d.ts",
+          [ "--readable-names" ]
+          "full", !! "node_modules/@types/react-modal/index.d.ts", [ "--readable-names" ]
 
-         // "safe" package which depends on another "safe" package
-         "safe", !! "node_modules/@types/yargs-parser/index.d.ts", [];
-         "safe", !! "node_modules/@types/yargs/index.d.ts", ["--rec-module=off"];
+          // "safe" package which depends on another "safe" package
+          "safe", !! "node_modules/@types/yargs-parser/index.d.ts", []
+          "safe", !! "node_modules/@types/yargs/index.d.ts", [ "--rec-module=off" ]
 
-         "minimal", !! "node_modules/@types/vscode/index.d.ts", ["--readable-names"];
-      ]
+          "minimal", !! "node_modules/@types/vscode/index.d.ts", [ "--readable-names" ]
+        ]
 
       for preset, package, additionalOptions in packages do
         ts2ocaml
-          (["jsoo"; "--verbose"; "--nowarn"; "--follow-relative-references";
-            $"--preset {preset}"; $"-o {outputDir}"] @ additionalOptions)
+          ([
+            "jsoo"
+            "--verbose"
+            "--nowarn"
+            "--follow-relative-references"
+            $"--preset {preset}"
+            $"-o {outputDir}"
+           ]
+           @ additionalOptions)
           package
 
     let build () =
       for file in outputDir |> Shell.copyRecursiveTo true srcDir do
         printfn "* copied to %s" file
+
       inDirectory testDir <| fun () -> dune "build"
 
   module Res =
@@ -168,63 +180,109 @@ module Test =
       let ts2res args files =
         Yarn.exec (sprintf "ts2ocaml res %s" (String.concat " " (Seq.append args files))) id
 
-      ts2res ["--create-stdlib"; $"-o {outputDir}"] []
+      ts2res [ "--create-stdlib" ; $"-o {outputDir}" ] []
 
-      let packages = [
-         // "full" package involving a lot of inheritance
-         "full", !! "node_modules/typescript/lib/typescript.d.ts", ["--experimental-tagged-union"];
+      let packages =
+        [
+          // "full" package involving a lot of inheritance
+          "full", !! "node_modules/typescript/lib/typescript.d.ts", [ "--experimental-tagged-union" ]
 
-         // "full" packages involving a lot of dependencies (which includes some "safe" packages)
-         "safe", !! "node_modules/@types/scheduler/tracing.d.ts", [];
-         "full", !! "node_modules/csstype/index.d.ts", [];
-         "safe", !! "node_modules/@types/prop-types/index.d.ts", [];
-         "full", !! "node_modules/@types/react/index.d.ts" ++ "node_modules/@types/react/global.d.ts", ["--readable-names"];
-         "full", !! "node_modules/@types/react-modal/index.d.ts", ["--readable-names"];
+          // "full" packages involving a lot of dependencies (which includes some "safe" packages)
+          "safe", !! "node_modules/@types/scheduler/tracing.d.ts", []
+          "full", !! "node_modules/csstype/index.d.ts", []
+          "safe", !! "node_modules/@types/prop-types/index.d.ts", []
+          "full",
+          !! "node_modules/@types/react/index.d.ts"
+          ++ "node_modules/@types/react/global.d.ts",
+          [ "--readable-names" ]
+          "full", !! "node_modules/@types/react-modal/index.d.ts", [ "--readable-names" ]
 
-         // "safe" package which depends on another "safe" package
-         "safe", !! "node_modules/@types/yargs-parser/index.d.ts", [];
-         "safe", !! "node_modules/@types/yargs/index.d.ts", [];
+          // "safe" package which depends on another "safe" package
+          "safe", !! "node_modules/@types/yargs-parser/index.d.ts", []
+          "safe", !! "node_modules/@types/yargs/index.d.ts", []
 
-         "minimal", !! "node_modules/@types/vscode/index.d.ts", ["--readable-names"];
-      ]
+          "minimal", !! "node_modules/@types/vscode/index.d.ts", [ "--readable-names" ]
+        ]
 
       for preset, package, additionalOptions in packages do
         ts2res
-          (["--verbose"; "--nowarn"; "--follow-relative-references";
-            $"--preset {preset}"; $"-o {outputDir}"] @ additionalOptions)
+          ([
+            "--verbose"
+            "--nowarn"
+            "--follow-relative-references"
+            $"--preset {preset}"
+            $"-o {outputDir}"
+           ]
+           @ additionalOptions)
           package
 
     let build () =
       Shell.mkdir srcGeneratedDir
+
       for file in outputDir |> Shell.copyRecursiveTo true srcGeneratedDir do
         printfn "* copied to %s" file
-      inDirectory testDir <| fun () ->
+
+      inDirectory testDir
+      <| fun () ->
         Yarn.install id
         Yarn.exec "rescript" id
 
-  let setup () =
-    Target.create "TestJsooClean" <| fun _ -> Jsoo.clean ()
-    Target.create "TestJsooGenerateBindings" <| fun _ -> Jsoo.generateBindings ()
-    Target.create "TestJsooBuild" <| fun _ -> Jsoo.build ()
-    Target.create "TestJsoo" ignore
+  module MoonBit =
+    let testDir = testDir </> "moonbit"
+    let outputDir = testDir </> "output"
+    let srcDir = testDir </> "src"
+
+    let clean () =
+      !! $"{outputDir}/*" |> Seq.iter Shell.rm
+
+    let generateBindings () =
+      Directory.create outputDir
+
+      let ts2mbt args files =
+        Yarn.exec (sprintf "ts2ocaml mbt %s" (String.concat " " (Seq.append args files))) id
+
+      ts2mbt [ "--verbose" ; $"-o {outputDir}" ] []
+
+    let build () =
+      for file in outputDir |> Shell.copyRecursiveTo true srcDir do
+        printfn "* copied to %s" file
+
+      inDirectory testDir <| fun () -> moon "build"
+  // let setup () =
+  //   Target.create "TestJsooClean" <| fun _ -> Jsoo.clean ()
+  //   Target.create "TestJsooGenerateBindings" <| fun _ -> Jsoo.generateBindings ()
+  //   Target.create "TestJsooBuild" <| fun _ -> Jsoo.build ()
+  //   Target.create "TestJsoo" ignore
+
+  //   "BuildForTest"
+  //     ==> "TestJsooClean"
+  //     ==> "TestJsooGenerateBindings"
+  //     ==> "TestJsooBuild"
+  //     ==> "TestJsoo"
+  //     ==> "Test"
+
+  //   Target.create "TestResClean" <| fun _ -> Res.clean ()
+  //   Target.create "TestResGenerateBindings" <| fun _ -> Res.generateBindings ()
+  //   Target.create "TestResBuild" <| fun _ -> Res.build ()
+  //   Target.create "TestRes" ignore
+
+  //   "BuildForTest"
+  //     ==> "TestResClean"
+  //     ==> "TestResGenerateBindings"
+  //     ==> "TestResBuild"
+  //     ==> "TestRes"
+  //     ==> "Test"
+  let setup () = 
+    Target.create "TestMoonBitClean" <| fun _ -> MoonBit.clean ()
+    Target.create "TestMoonBitGenerateBindings" <| fun _ -> MoonBit.generateBindings ()
+    Target.create "TestMoonBitBuild" <| fun _ -> MoonBit.build ()
+    Target.create "TestMoonBit" ignore
 
     "BuildForTest"
-      ==> "TestJsooClean"
-      ==> "TestJsooGenerateBindings"
-      ==> "TestJsooBuild"
-      ==> "TestJsoo"
-      ==> "Test"
-
-    Target.create "TestResClean" <| fun _ -> Res.clean ()
-    Target.create "TestResGenerateBindings" <| fun _ -> Res.generateBindings ()
-    Target.create "TestResBuild" <| fun _ -> Res.build ()
-    Target.create "TestRes" ignore
-
-    "BuildForTest"
-      ==> "TestResClean"
-      ==> "TestResGenerateBindings"
-      ==> "TestResBuild"
-      ==> "TestRes"
+      ==> "TestMoonBitClean"
+      ==> "TestMoonBitGenerateBindings"
+      ==> "TestMoonBitBuild"
+      ==> "TestMoonBit"
       ==> "Test"
 
 // Publish targets
@@ -244,48 +302,52 @@ module Publish =
 
     let copyArtifacts () =
       let mliDir = outputDir </> "test_jsoo"
-      let mlDir  = testDir </> "jsoo/_build/default/src"
-      let targets = ["ts2ocaml_min"; "ts2ocaml_es"; "ts2ocaml_dom"; "ts2ocaml_webworker"]
+      let mlDir = testDir </> "jsoo/_build/default/src"
+
+      let targets =
+        [ "ts2ocaml_min" ; "ts2ocaml_es" ; "ts2ocaml_dom" ; "ts2ocaml_webworker" ]
+
       let targetDir = targetDir </> "src"
+
       for target in targets do
         Shell.rm (targetDir </> $"{target}.mli")
         Shell.copyFile targetDir (mliDir </> $"{target}.mli")
         Shell.rm (targetDir </> $"{target}.ml")
         Shell.copyFile targetDir (mlDir </> $"{target}.ml")
 
-    let versionRegex =
-      String.getRegEx "\\(version ((?>.)*)\\)"
+    let versionRegex = String.getRegEx "\\(version ((?>.)*)\\)"
 
     let updateVersion () =
-      duneProject |> File.applyReplace (fun content ->
+      duneProject
+      |> File.applyReplace (fun content ->
         let result = versionRegex.Match content
+
         if result.Success then
           let oldVersion = result.Groups.[1].Value
+
           if oldVersion <> newVersion then
             printfn $"* updating version in dist/jsoo/dune-project from '{oldVersion}' to '{newVersion}'."
             content |> String.replace result.Value $"(version {newVersion})"
           else
             printfn $"* version in dist/jsoo/dune-project not updated ('{newVersion}')."
             content
-        else content
+        else
+          content
       )
 
     let testBuild () =
       inDirectory targetDir <| fun () -> dune "build"
 
   let setup () =
-    Target.create "PublishNpm" <| fun _ ->
-      Npm.updateVersion ()
+    Target.create "PublishNpm" <| fun _ -> Npm.updateVersion ()
 
-    Target.create "PublishJsoo" <| fun _ ->
+    Target.create "PublishJsoo"
+    <| fun _ ->
       Jsoo.copyArtifacts ()
       Jsoo.updateVersion ()
       Jsoo.testBuild ()
 
-    "BuildForPublish"
-      ==> "PublishNpm"
-      ==> "PublishJsoo"
-      ==> "Publish"
+    "BuildForPublish" ==> "PublishNpm" ==> "PublishJsoo" ==> "Publish"
 
 // Utility targets
 
@@ -311,13 +373,9 @@ let main argv =
   Utility.setup ()
 
   Target.create "All" ignore
-  "Prepare"
-    ==> "Build"
-    ==> "Test"
-    ==> "Publish"
-    ==> "All"
+  "Prepare" ==> "Build" ==> "Test" ==> "Publish" ==> "All"
 
   // start build
   Target.runOrDefault "All"
-  
+
   0
