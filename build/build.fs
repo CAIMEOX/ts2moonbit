@@ -356,7 +356,6 @@ module Utility =
     Target.create "UpdateBindings" <| fun _ -> BindingUpdater.run ()
     "Prepare" ==> "UpdateBindings"
 
-[<EntryPoint>]
 let main argv =
   // ensure working at the repository root
   Shell.cd (Path.combine __SOURCE_DIRECTORY__ "..")

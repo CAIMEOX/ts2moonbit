@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BindingUpdater.fs" />
-    <Compile Include="build.fs" />
+    <Compile Include="Test.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Fake.Core.Process" Version="6.0.0" />
