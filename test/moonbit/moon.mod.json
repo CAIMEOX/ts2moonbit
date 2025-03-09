@@ -1,10 +1,13 @@
 {
-  "name": "ts2moonbit",
+  "name": "CAIMEOX/ts2moonbit",
   "version": "0.1.0",
+  "deps": {
+    "rami3l/js-ffi": "0.2.0"
+  },
   "readme": "README.md",
   "repository": "",
   "license": "Apache-2.0",
   "keywords": [],
-  "description": "",
+  "description": "ts2moonbit experiments and tests",
   "source": "src"
 }

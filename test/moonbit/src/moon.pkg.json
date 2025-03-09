@@ -1,1 +1,8 @@
-{}
+{
+  "import": [
+    {
+      "alias": "js",
+      "path": "rami3l/js-ffi/js"
+    }
+  ]
+}
