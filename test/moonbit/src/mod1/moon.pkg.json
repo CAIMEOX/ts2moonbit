@@ -1,0 +1,7 @@
+{
+  "import": [
+    {
+      "path": "CAIMEOX/ts2moonbit/internal"
+    }
+  ]
+}

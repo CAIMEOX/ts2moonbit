@@ -1,0 +1,8 @@
+{
+  "import": [
+    {
+      "alias": "top",
+      "path": "CAIMEOX/ts2moonbit/internal"
+    }
+  ]
+}
