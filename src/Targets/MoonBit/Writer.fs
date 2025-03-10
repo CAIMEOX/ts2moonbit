@@ -88,3 +88,157 @@ module OverrideFunc =
       match f2 f et ctx ty with
       | Some t -> Some t
       | None -> f1 f et ctx ty
+
+// let emitEnum (flags: EmitTypeFlags) ctx (cases : Set<Choice<Enum * EnumCase * _, Literal>>)
+let emitTypeImpl (flags : EmitTypeFlags) (overrideFunc : OverrideFunc) (ctx : Context) (ty : Type) = failwith "todo"
+
+let emitUnion (flags : EmitTypeFlags) (overrideFunc : OverrideFunc) (ctx : Context) (u : UnionType) : text =
+  if not flags.resolveUnion then
+    u.types
+    |> List.distinct
+    |> List.map (emitTypeImpl (EmitTypeFlags.noExt flags) overrideFunc ctx)
+    |> Type.union
+  else if flags.external = External.Return true then
+    let u = ResolvedUnion.checkNullOrUndefined u
+
+    let rest =
+      if List.isEmpty u.rest then
+        Type.never
+      else
+        let t = Union { types = u.rest }
+        emitTypeImpl (EmitTypeFlags.noExt flags) overrideFunc ctx t
+
+    match u.hasNull, u.hasUndefined with
+    | true, _
+    | _, true -> Type.option rest
+    | false, false -> rest
+  else
+    let u = ResolvedUnion.resolve ctx u
+
+    let case name value =
+      {|
+        name = Choice1Of2 name
+        value = value
+        attr = None
+      |}
+
+    let treatEnum (cases) =
+      let handleLiteral l attr ty =
+        match l with
+        | LString s ->
+          Choice1Of2
+            {|
+              name = Choice1Of2 s
+              value = None
+              attr = attr
+            |}
+        | LInt i ->
+          Choice1Of2
+            {|
+              name = Choice2Of2 i
+              value = None
+              attr = attr
+            |}
+        | LFloat _ -> Choice2Of2 (ty |? Type.float)
+        | LBool _ -> Choice2Of2 (ty |? Type.boolean)
+
+      let cases =
+        List.distinct
+          [
+            for c in cases do
+              match c with
+              | Choice1Of2 (_, _, ty) ->
+                let ty = emitTypeImpl (EmitTypeFlags.noExt flags) overrideFunc ctx ty
+                yield Choice2Of2 ty
+              | Choice2Of2 l -> yield handleLiteral l None None
+          ]
+
+      let cases, rest = List.splitChoice2 cases
+      [ yield! rest ]
+
+    let treatArray (ts : Set<Type>) =
+      let elemT =
+        let elemT =
+          match Set.toList ts with
+          | [ t ] -> t
+          | ts -> Union { types = ts }
+
+        emitTypeImpl (EmitTypeFlags.noExt flags) overrideFunc ctx elemT
+
+      Type.app Type.array [ elemT ]
+
+    let treatDUMany du =
+      let types =
+        du
+        |> Map.toList
+        |> List.collect (fun (_, cases) -> Map.toList cases)
+        |> List.map (fun (_, t) -> t)
+
+      types
+      |> List.map (emitTypeImpl (EmitTypeFlags.noExt { flags with resolveUnion = false }) overrideFunc ctx)
+      |> List.distinct
+
+    let baseTypes =
+      [
+        if not (Set.isEmpty u.caseEnum) then
+          yield! treatEnum u.caseEnum
+        if not (Map.isEmpty u.discriminatedUnions) then
+          yield! treatDUMany u.discriminatedUnions
+        match u.caseArray with
+        | Some ts -> yield treatArray ts
+        | None -> ()
+        for t in u.otherTypes do
+          yield emitTypeImpl (EmitTypeFlags.noExt { flags with resolveUnion = false }) overrideFunc ctx t
+      ]
+
+
+    failwith "todo"
+
+type StructuredTextItemBase<'TypeDefText, 'Binding, 'EnumCaseText> =
+  /// Will always be emitted to the moon.pkg.json file.
+  | ImportText of text
+  | TypeDefText of 'TypeDefText
+  | TypeAliasText of text
+  | Comment of text
+  | Binding of 'Binding
+  | EnumCaseText of 'EnumCaseText
+
+and StructuredTextItem =
+  StructuredTextItemBase<
+    TypeDefText,
+    (OverloadRenamer -> CurrentScope -> Binding),
+    {|
+      name : string
+      comments : Comment list
+    |}
+   >
+
+and TypeDefText =
+  {
+    name : string
+    tyargs : (TypeParam * text) list
+    body : text option
+    isRec : bool
+    shouldAssert : bool
+    attrs : text list
+    comments : text list
+  }
+
+  static member Create (name, tyargs, body, ?attrs, ?comments, ?isRec, ?shouldAssert) =
+    TypeDefText
+      {
+        name = name
+        tyargs = tyargs
+        body = body
+        attrs = attrs |? []
+        comments = comments |? []
+        isRec = isRec |? false
+        shouldAssert = shouldAssert |? false
+      }
+
+and CurrentScope =
+  {
+    jsModule : string option
+    /// reversed list of scope
+    scopeRev : string list
+  }

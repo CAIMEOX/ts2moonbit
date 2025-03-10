@@ -69,6 +69,7 @@ module Type =
     | xs -> concat (str ",") xs |> between "(" ")"
 
 
+
   let arrow args ret =
     let lhs =
       match args with
@@ -82,6 +83,22 @@ module Type =
     | [] -> failwith "type application with empty arguments"
     | _ -> t + between "[" "]" (concat (str ", ") args)
 
+
+  let rec union =
+    function
+    | [] -> failwith "union type with zero elements"
+    | x :: [] -> x
+    | xs -> app (tprintf "@js.Union%i" (List.length xs)) xs
+
+  // TODO: add intersection type to js header
+  let rec intersection =
+    function
+    | [] -> failwith "intersection type with zero elements"
+    | x :: [] -> x
+    | x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: rest ->
+      app (str "Intersection.t8") [ x1 ; x2 ; x3 ; x4 ; x5 ; x6 ; x7 ; intersection (x8 :: rest) ]
+    | xs -> app (tprintf "@js.Intersection%i" (List.length xs)) xs
+
   // primitive types
   let unit = str "Unit"
   let string = str "String"
@@ -93,6 +110,15 @@ module Type =
 
   let array = str "Array"
   let option t = app (str "Option") [ t ]
+
+
+  // typescript types
+  let never = str "Never"
+  let any = str "@js.Value"
+  let object = str "@js.Object"
+  let undefined = unit
+  let null_ = str "@js.Nullable<never>"
+  let nullable t = app (str "@js.Nullable") [ t ]
 
 [<RequireQualifiedAccess>]
 module Term =
