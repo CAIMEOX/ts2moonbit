@@ -22,7 +22,7 @@ let docComment text =
       if isMultiLine text then newline + indent text + newline
       else between " " " " text
     between "(**" "*)" inner
-let docCommentStr text =tprintf "(** %s *)" text
+let docCommentStr text = tprintf "(** %s *)" text
 
 let [<Literal>] pv_head = "`"
 

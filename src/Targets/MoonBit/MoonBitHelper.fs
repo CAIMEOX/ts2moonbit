@@ -32,6 +32,22 @@ module Naming =
     )
     |> System.String
 
+  let private jsModuleToMoonBitName (jsModuleName : string) =
+    jsModuleName.TrimStart ('@')
+    |> String.splitThenRemoveEmptyEntries "/"
+    |> Array.toList
+    |> List.map (fun n -> n |> Naming.toCase Naming.Case.LowerSnakeCase)
+    |> String.concat "__"
+
+  let typeAlias (name : string) = failwith "TODO"
+
+  let jsModuleNameToFileName (name : string) =
+    name |> jsModuleToMoonBitName |> sprintf "%s.mbt"
+
+  let jsModuleNameToMoonBitName (name : string) =
+    name |> jsModuleToMoonBitName |> typeAlias
+
+
   let keywords =
     set
       [
@@ -130,6 +146,14 @@ module Term =
 
   let app t us =
     t + (us |> concat (str ", ") |> between "(" ")")
+
+  let record (fields : (string * text) list) =
+    if List.isEmpty fields then
+      failwith "record: empty fields of struct"
+    else
+      List.map (fun (name, body) -> name + "=" @+ body) fields
+      |> concat (str "; ")
+      |> between "{" "}"
 
   let literal =
     function

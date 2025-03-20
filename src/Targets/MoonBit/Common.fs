@@ -1,6 +1,8 @@
 module Targets.MoonBit.Common
 
 open Ts2Ml
+open DataTypes
+
 
 type Options =
     inherit GlobalOptions
@@ -26,3 +28,9 @@ module Options =
                 descr = "The directory to place the generated bindings.\nIf not set, it will be the current directory.",
                 alias = "o"
             )
+
+type Output = {
+  fileName: string
+  content: text
+  stubLines: string list
+}
