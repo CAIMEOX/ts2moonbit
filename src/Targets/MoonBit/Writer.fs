@@ -89,6 +89,42 @@ module OverrideFunc =
       | Some t -> Some t
       | None -> f1 f et ctx ty
 
+let literalToIdentifier (ctx : Context) (l : Literal) : text =
+  let formatString (s : string) =
+    (s :> char seq)
+    |> Seq.map (fun c -> if Char.isAlphabetOrDigit c then c else '_')
+    |> Seq.toArray
+    |> System.String
+
+  let formatNumber (x : 'a) =
+    string x
+    |> String.replace "+" "plus"
+    |> String.replace "-" "minus"
+    |> String.replace "." "_"
+
+  match l with
+  | LString s ->
+    match
+      ctx
+      |> Context.bindCurrentSourceInfo (fun i -> i.typeLiteralsMap |> Map.tryFind l)
+    with
+    | Some i ->
+      if String.forall (Char.isAlphabetOrDigit >> not) s then
+        tprintf "s%i" i
+      else
+        tprintf "s%i_%s" i (formatString s)
+    | None -> failwithf "the literal '%s' is not found in the context" s
+  | LInt i -> tprintf "n_%s" (formatNumber i)
+  | LFloat l -> tprintf "n_%s" (formatNumber l)
+  | LBool true -> str "b_true"
+  | LBool false -> str "b_false"
+
+let anonymousInterfaceModuleName (_ : Context) (info : AnonymousInterfaceInfo) =
+  match info.origin.valueName, info.origin.argName with
+  | _, Some s
+  | Some s, None -> sprintf "%s%d" (Naming.toCase Naming.PascalCase s) info.id
+  | _ -> sprintf "AnonymousInterface%d" info.id
+
 // let emitEnum (flags: EmitTypeFlags) ctx (cases : Set<Choice<Enum * EnumCase * _, Literal>>)
 let emitTypeImpl (flags : EmitTypeFlags) (overrideFunc : OverrideFunc) (ctx : Context) (ty : Type) = failwith "todo"
 
