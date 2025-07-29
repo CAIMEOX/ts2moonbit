@@ -10,11 +10,11 @@ pub fn callFromToplevel() -> String {
 }
 
 ///|
-typealias U2 = @js.Union2[String, Int]
+typealias @js.Union2[String, Int] as U2
 
 ///| Test Union Types
 test {
-  inspect!(i().to1(), content="Some(1)")
-  inspect!(j().to0(), content="Some(\"a\")")
-  inspect!(i().to0(), content="None")
+  inspect(i().to1(), content="Some(1)")
+  inspect(j().to0(), content="Some(\"a\")")
+  inspect(i().to0(), content="None")
 }
